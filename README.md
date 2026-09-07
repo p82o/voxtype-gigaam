@@ -128,5 +128,5 @@ it contains preconditions, the exact procedure, acceptance criteria, do-nots, an
 
 - Model: [ai-sage/GigaAM-v3](https://huggingface.co/ai-sage/GigaAM-v3) (MIT, Sber),
   paper: *GigaAM: Efficient Self-Supervised Learner for Speech Recognition* (InterSpeech 2025)
-- Voice input daemon: [voxtype](https://github.com/wstcegg/voxtype)
+- Voice input daemon: [voxtype](https://github.com/peteonrails/voxtype) (peteonrails)
 - Code here: MIT — see [LICENSE](LICENSE)
