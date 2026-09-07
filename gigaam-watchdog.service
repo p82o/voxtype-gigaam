@@ -1,0 +1,7 @@
+[Unit]
+Description=Health check for gigaam-server, restarts it if hung
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/gigaam-watchdog.sh
+NoNewPrivileges=true
