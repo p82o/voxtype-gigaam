@@ -43,6 +43,18 @@ cd voxtype-gigaam
 
 Then hold your push-to-talk key and speak Russian. That's it.
 
+## Repository layout
+
+```
+install.sh, verify.sh      one-command install / acceptance tests (repo root)
+requirements.txt           pinned Python deps (load-bearing, see inside)
+server/server.py           OpenAI-compatible ASR server (FastAPI, 127.0.0.1:8394)
+systemd/                   user units: gigaam-server.service, gigaam-watchdog.{service,timer}
+scripts/gigaam-watchdog.sh health-check script the timer runs
+config/voxtype-config.toml reference voxtype sections ([whisper], [audio]) to merge
+docs/notes-ru.md           battle-tested notes & pitfalls (Russian)
+```
+
 ## Requirements
 
 - Linux with a **systemd user session** (Wayland or X11)
@@ -53,13 +65,13 @@ Then hold your push-to-talk key and speak Russian. That's it.
 
 ## What `install.sh` does
 
-1. Downloads 4 model files from [ai-sage/GigaAM-v3 @ e2e_rnnt](https://huggingface.co/ai-sage/GigaAM-v3/tree/e2e_rnnt)
+1. Downloads 4 model files from [ai-sage/GigaAM-v3 @ e2e_rnnt](https://huggingface.co/ai-sage/GigaAM-v3/tree/e2e_rnnt) (URL recorded in `install.sh`)
    into `~/.local/share/gigaam/model/` (skips files already present).
 2. Creates `~/.local/share/gigaam/venv` with **pinned** versions:
    `torch==2.9.1 + torchaudio==2.9.1` (CPU wheels), `transformers==4.57.6`,
    plus runtime deps (`fastapi`, `uvicorn`, `pytorch-lightning`, `pyannote.audio`,
    `python-multipart`, …). Version pins are **load-bearing** — see Troubleshooting.
-3. Copies `server.py` (OpenAI-compatible ASR server) to `~/.local/share/gigaam/`.
+3. Copies `server/server.py` (OpenAI-compatible ASR server) to `~/.local/share/gigaam/`.
 4. Installs and enables user units: `gigaam-server.service` (auto-restart on failure)
    and `gigaam-watchdog.timer` + `gigaam-watchdog.sh` (health-check → restart on hang).
 5. Merges `voxtype-config.toml` into `~/.config/voxtype/config.toml`:
@@ -73,9 +85,9 @@ is idempotent — safe to re-run.
 
 | Path | What |
 |---|---|
-| `~/.local/share/gigaam/{model,venv,server.py}` | model, venv, server script |
+| `~/.local/share/gigaam/{model,venv,server.py}` | model, venv, server script (server from `server/`) |
 | `~/.config/systemd/user/gigaam-server.service` | ASR server unit |
-| `~/.config/systemd/user/gigaam-watchdog.{service,timer}`, `~/.local/bin/gigaam-watchdog.sh` | watchdog |
+| `~/.config/systemd/user/gigaam-watchdog.{service,timer}`, `~/.local/bin/gigaam-watchdog.sh` (from `scripts/`, `systemd/`) | watchdog |
 | `~/.config/voxtype/config.toml` | voxtype switched to remote mode (backup kept) |
 
 Network use: model from Hugging Face, packages from PyPI, optional test wav from Sber CDN

@@ -15,6 +15,8 @@ log()  { printf '\033[1;32m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mWARN:\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
+MODEL_BASE_URL="https://huggingface.co/ai-sage/GigaAM-v3/resolve/e2e_rnnt"
+
 # ---------------------------------------------------------------- preconditions
 command -v python3 >/dev/null || die "python3 not found"
 command -v ffmpeg   >/dev/null || die "ffmpeg not found (required by model's load_audio)"
@@ -29,13 +31,12 @@ fi
 # ---------------------------------------------------------------- 1. model files
 log "Downloading model files (ai-sage/GigaAM-v3 @ e2e_rnnt) if missing..."
 mkdir -p "$MODEL_DIR"
-BASE="https://huggingface.co/ai-sage/GigaAM-v3/resolve/e2e_rnnt"
 for f in config.json modeling_gigaam.py tokenizer.model pytorch_model.bin; do
   if [ -s "$MODEL_DIR/$f" ]; then
     echo "   present: $f"
   else
     echo "   fetching: $f"
-    curl -fL --retry 3 --silent --show-error -o "$MODEL_DIR/$f" "$BASE/$f" \
+    curl -fL --retry 3 --silent --show-error -o "$MODEL_DIR/$f" "$MODEL_BASE_URL/$f" \
       || die "failed to download $f"
   fi
 done
@@ -58,17 +59,17 @@ log "Installing pinned transformers and runtime deps (this can take a few minute
 
 # ---------------------------------------------------------------- 3. server.py
 log "Installing server.py ..."
-install -m 644 "$REPO_DIR/server.py" "$GIGAAM_DIR/server.py"
+install -m 644 "$REPO_DIR/server/server.py" "$GIGAAM_DIR/server.py"
 
 # ---------------------------------------------------------------- 4. systemd units
 log "Installing systemd user units ..."
 mkdir -p "$SYSTEMD_DIR" "$HOME/.local/bin"
 for u in gigaam-server.service gigaam-watchdog.service gigaam-watchdog.timer; do
   [ -f "$SYSTEMD_DIR/$u" ] && cp -a "$SYSTEMD_DIR/$u" "$SYSTEMD_DIR/$u.bak.$TS"
-  install -m 644 "$REPO_DIR/$u" "$SYSTEMD_DIR/$u"
+  install -m 644 "$REPO_DIR/systemd/$u" "$SYSTEMD_DIR/$u"
 done
 [ -f "$HOME/.local/bin/gigaam-watchdog.sh" ] && cp -a "$HOME/.local/bin/gigaam-watchdog.sh" "$HOME/.local/bin/gigaam-watchdog.sh.bak.$TS"
-install -m 755 "$REPO_DIR/gigaam-watchdog.sh" "$HOME/.local/bin/gigaam-watchdog.sh"
+install -m 755 "$REPO_DIR/scripts/gigaam-watchdog.sh" "$HOME/.local/bin/gigaam-watchdog.sh"
 
 systemctl --user daemon-reload
 systemctl --user enable --now gigaam-server.service
@@ -95,7 +96,7 @@ if [ ! -f "$VXC" ]; then
 else
   log "Merging remote-mode settings into voxtype config (hotkey section is preserved)..."
   cp -a "$VXC" "$VXC.bak.$TS"
-  python3 - "$VXC" "$REPO_DIR/voxtype-config.toml" <<'PYEOF'
+  python3 - "$VXC" "$REPO_DIR/config/voxtype-config.toml" <<'PYEOF'
 import sys, re
 
 target_path, template_path = sys.argv[1], sys.argv[2]

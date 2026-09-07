@@ -41,8 +41,9 @@ Run:
 
 `install.sh` is idempotent and backs up anything it overwrites as `*.bak.<ts>`:
 model → `~/.local/share/gigaam/model/`, venv → `~/.local/share/gigaam/venv/`,
-server → `~/.local/share/gigaam/server.py`, user units + watchdog → systemd user units,
-voxtype config → merged (remote mode, `max_duration_secs=300`, **hotkey preserved**).
+server → `~/.local/share/gigaam/server.py` (from `server/`), user units + watchdog →
+systemd user units (from `systemd/`, `scripts/`), voxtype config → merged
+(remote mode, `max_duration_secs=300`, **hotkey preserved**).
 
 `install.sh` does NOT restart the voxtype service. After a successful verify, do it:
 
