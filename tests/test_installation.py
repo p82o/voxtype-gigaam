@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 
 REPO = Path(__file__).resolve().parents[1]
@@ -60,6 +61,17 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout.decode().strip(), hashlib.sha256(hotkey).hexdigest())
             self.assertTrue(path.read_bytes().endswith(hotkey))
+
+    def test_reference_config_matches_installed_settings(self):
+        example = tomllib.loads((REPO / "config/voxtype-config.toml").read_text())
+        self.assertNotIn("hotkey", example)
+        self.assertNotIn("device", example["audio"])
+        code, merged = self.merge(b'[hotkey]\nkey="EVTEST_582"\n')
+        self.assertEqual(code, 0)
+        actual = tomllib.loads(merged.decode())
+        self.assertEqual(actual["engine"], example["engine"])
+        for section in ("whisper", "audio"):
+            self.assertEqual(actual[section], example[section])
 
 
 MOCK = r'''#!/usr/bin/env python3

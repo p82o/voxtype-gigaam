@@ -1,0 +1,18 @@
+# Пример ASR-настроек voxtype для локального GigaAM v3 e2e RNN-T.
+# install.sh вносит эти настройки через scripts/merge-config.py.
+# Это справочный фрагмент: переносите ключи в соответствующие секции.
+# engine находится на верхнем уровне TOML; не дописывайте фрагмент целиком в конец.
+# Существующий [hotkey] и выбранный пользователем микрофон сохраняйте.
+# При первой настройке [hotkey] задаётся отдельно под клавишу пользователя.
+engine = "whisper"
+
+[whisper]
+model = "gigaam-v3-e2e-rnnt"
+mode = "remote"
+remote_endpoint = "http://127.0.0.1:8394"
+remote_model = "gigaam-v3-e2e-rnnt"
+remote_timeout_secs = 60
+language = "ru"
+
+[audio]
+max_duration_secs = 300

@@ -3,7 +3,7 @@ import os
 import tempfile
 import threading
 
-MODEL_DIR = os.environ.get("MODEL_DIR", os.path.expanduser("~/.local/share/gigaam/model"))
+MODEL_DIR = os.environ.get("MODEL_DIR", "/opt/model")
 
 import torch  # noqa: E402
 import gigaam  # noqa: E402

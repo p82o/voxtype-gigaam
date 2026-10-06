@@ -17,16 +17,11 @@ while read -r hash file; do
   if printf '%s  %s\n' "$hash" "$DEST/$file" | sha256sum --check --status 2>/dev/null; then
     continue
   fi
-  cached="$HOME/.local/share/gigaam/model/$file"
-  if printf '%s  %s\n' "$hash" "$cached" | sha256sum --check --status 2>/dev/null; then
-    cp "$cached" "$DEST/$file"
-  else
-    curl -q -fL --retry 3 --silent --show-error \
-      "https://cdn.chatwm.opensmodel.sberdevices.ru/GigaAM/$file" \
-      -o "$DEST/$file.part"
-    printf '%s  %s\n' "$hash" "$DEST/$file.part" | sha256sum --check --status
-    mv "$DEST/$file.part" "$DEST/$file"
-  fi
+  curl -q -fL --retry 3 --silent --show-error \
+    "https://cdn.chatwm.opensmodel.sberdevices.ru/GigaAM/$file" \
+    -o "$DEST/$file.part"
+  printf '%s  %s\n' "$hash" "$DEST/$file.part" | sha256sum --check --status
+  mv "$DEST/$file.part" "$DEST/$file"
 done < "$REPO_DIR/model/SHA256SUMS"
 (cd "$DEST" && sha256sum --check --status "$REPO_DIR/model/SHA256SUMS")
 echo 'Model checksums verified.'

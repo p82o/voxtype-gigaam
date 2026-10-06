@@ -13,6 +13,7 @@ done
 [[ $(uname -m) == x86_64 ]] || die 'This lock supports Linux amd64 only'
 docker info >/dev/null 2>&1 || die 'Docker daemon is unavailable or inaccessible'
 docker compose version >/dev/null 2>&1 || die 'Docker Compose is required'
+docker buildx version >/dev/null 2>&1 || die 'Docker Buildx is required'
 systemctl --user show-environment >/dev/null 2>&1 || die 'A systemd user session is required'
 command -v voxtype >/dev/null || die 'Install voxtype first'
 [[ -f "$VXC" ]] || die 'Existing voxtype config is required'
@@ -29,7 +30,7 @@ if ! docker build --pull --no-cache-filter runtime-os --platform linux/amd64 -t 
   die 'Image build failed; diagnostic log: .build/build.log'
 fi
 IMAGE=$(docker image inspect --format '{{.Id}}' voxtype-gigaam:local)
-log 'Auditing dependencies and the built image before switching ASR...'
+log 'Auditing dependencies and the built image before starting ASR...'
 bash "$REPO_DIR/scripts/audit.sh" --image "$IMAGE" || die 'Security audit failed; the existing ASR is unchanged'
 # Smoke-load only; no listener or alternate ASR server is started.
 if ! docker run --rm --network none --read-only --tmpfs /tmp:rw,size=256m \
@@ -41,7 +42,6 @@ fi
 mkdir -p "$STACK_DIR" "$SYSTEMD_DIR" "$HOME/.local/bin"
 
 systemctl --user stop gigaam-watchdog.timer gigaam-watchdog.service 2>/dev/null || true
-systemctl --user disable --now gigaam-server.service >/dev/null 2>&1 || true
 install -m 644 "$REPO_DIR/compose.yaml" "$STACK_DIR/compose.yaml"
 printf 'GIGAAM_IMAGE=%s\n' "$IMAGE" > "$STACK_DIR/image.env"
 compose() {

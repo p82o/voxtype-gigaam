@@ -25,7 +25,6 @@ wait_ready() {
 systemctl --user is-active --quiet gigaam-watchdog.timer || fail 'watchdog timer is inactive'
 systemctl --user is-active --quiet voxtype || fail 'voxtype is inactive'
 [[ $(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' gigaam-asr) == voxtype-gigaam ]] || fail 'container ownership'
-if systemctl --user is-active --quiet gigaam-server.service; then fail 'legacy ASR service is still active'; fi
 [[ $(docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' gigaam-asr) == always ]] || fail 'restart policy'
 [[ $(docker inspect --format '{{(index (index .NetworkSettings.Ports "8394/tcp") 0).HostIp}}' gigaam-asr) == 127.0.0.1 ]] || fail 'port is not loopback-only'
 [[ $(docker inspect --format '{{.Config.User}}' gigaam-asr) == 10001:10001 ]] || fail 'container runs as an unexpected user'
