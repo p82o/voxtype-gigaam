@@ -1,24 +1,13 @@
-# Pinned runtime deps for gigaam-server (GigaAM v3 e2e RNN-T).
-# torch/torchaudio are installed separately with --index-url https://download.pytorch.org/whl/cpu
-#
-# Pins are LOAD-BEARING (verified 2026-09, Python 3.14, CachyOS, niri+GNOME):
-#   - transformers>=5 breaks model init ("Tensor on device cpu is not on the
-#     expected device meta") — stay on 4.57.x.
-#   - torch 2.9.1 verified; upstream model card recommends 2.8.0.
-transformers==4.57.6
-fastapi
-uvicorn
-pytorch-lightning
-pytorch-metric-learning
-torch-audiomentations
-torch_pitch_shift
-torchcodec
-torchmetrics
-numpy
-# required by the model's remote code (modeling_gigaam.py), not obvious:
-hydra-core
-omegaconf
-sentencepiece
-pyannote.audio
-# required by FastAPI Form/File endpoints, not pulled in automatically:
-python-multipart
+# Inference dependencies for the unmodified, commit-pinned upstream GigaAM code.
+# Update the CPU pair together; install the complete requirements.lock with hashes.
+torch==2.11.0+cpu
+torchaudio==2.11.0+cpu
+fastapi>=0.141.1,<1
+uvicorn>=0.52.4,<1
+python-multipart>=0.0.32,<1
+hydra-core==1.3.*
+numpy==2.*
+omegaconf==2.3.*
+soundfile>=0.14,<1
+sentencepiece>=0.2,<1
+tqdm>=4.70,<5

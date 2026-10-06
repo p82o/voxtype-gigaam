@@ -1,14 +1,13 @@
 import logging
 import os
-import sys
 import tempfile
 import threading
 
-MODEL_DIR = os.path.expanduser("~/.local/share/gigaam/model")
-sys.path.insert(0, MODEL_DIR)
+MODEL_DIR = os.environ.get("MODEL_DIR", os.path.expanduser("~/.local/share/gigaam/model"))
 
 import torch  # noqa: E402
-from transformers import AutoModel  # noqa: E402
+import gigaam  # noqa: E402
+from gigaam import load_audio  # noqa: E402
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile  # noqa: E402
 import uvicorn  # noqa: E402
 
@@ -21,15 +20,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("gigaam-server")
 
 log.info("loading GigaAM v3 e2e RNN-T from %s ...", MODEL_DIR)
-model = AutoModel.from_pretrained(
-    MODEL_DIR, trust_remote_code=True, local_files_only=True
-)
+# Use upstream inference directly with embedded, checksum-verified model files.
+model = gigaam.load_model("v3_e2e_rnnt", device="cpu", download_root=MODEL_DIR)
 model.eval()
 torch.set_grad_enabled(False)
 _lock = threading.RLock()
 log.info("model ready")
-
-from modeling_gigaam import load_audio  # noqa: E402
 
 app = FastAPI(title="gigaam-asr", docs_url=None, redoc_url=None)
 
@@ -39,9 +35,9 @@ def _transcribe_path(path: str) -> str:
     n = wav.shape[-1]
     if n == 0:
         return ""
-    inner = model.model
+    inner = model
     if n <= MAX_SHORT:
-        return inner.transcribe(path).strip()
+        return inner.transcribe(path).text.strip()
     parts = []
     with _lock:
         for start in range(0, n, CHUNK):
@@ -49,7 +45,7 @@ def _transcribe_path(path: str) -> str:
             w = chunk.unsqueeze(0).to(inner._device).to(inner._dtype)
             length = torch.full([1], w.shape[-1], device=inner._device)
             enc, enc_len = inner.forward(w, length)
-            parts.append(inner.decoding.decode(inner.head, enc, enc_len)[0])
+            parts.append(inner.decoding.decode(inner.head, enc, enc_len)[0][0])
     return " ".join(p.strip() for p in parts if p.strip()).strip()
 
 
@@ -79,16 +75,16 @@ async def transcriptions(
     except HTTPException:
         raise
     except Exception as exc:
-        log.exception("transcription failed")
-        raise HTTPException(status_code=500, detail=str(exc))
+        log.error("transcription failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="transcription failed") from None
     finally:
         try:
             os.unlink(tmp.name)
         except OSError:
             pass
-    log.info("transcribed %d bytes -> %r", len(data), text[:80])
+    log.info("transcribed %d bytes", len(data))
     return {"text": text}
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
+    uvicorn.run(app, host=os.environ.get("ASR_HOST", "127.0.0.1"), port=PORT, log_level="warning")

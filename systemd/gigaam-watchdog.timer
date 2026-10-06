@@ -1,5 +1,5 @@
 [Unit]
-Description=Run gigaam watchdog every minute
+Description=Check the GigaAM Docker container every 15 seconds
 
 [Timer]
 OnBootSec=3min

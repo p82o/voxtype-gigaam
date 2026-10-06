@@ -1,0 +1,30 @@
+name: voxtype-gigaam
+services:
+  asr:
+    image: ${GIGAAM_IMAGE:-voxtype-gigaam:local}
+    platform: linux/amd64
+    container_name: gigaam-asr
+    restart: always
+    ports:
+      - "127.0.0.1:8394:8394"
+    environment:
+      MODEL_DIR: /opt/model
+      ASR_HOST: 0.0.0.0
+      OMP_NUM_THREADS: "8"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 15s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8394/health', timeout=15).close()"]
+      interval: 30s
+      timeout: 16s
+      retries: 2
+      start_period: 120s

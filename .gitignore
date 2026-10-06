@@ -7,6 +7,7 @@ venv/
 # local test artifacts
 *.wav
 /tmp/
+.build/
 
 # editor
 .idea/

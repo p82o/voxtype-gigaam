@@ -1,0 +1,18 @@
+[
+  {
+    "package": "torch",
+    "versions": ["2.11.0", "2.11.0+cpu"],
+    "ids": ["CVE-2025-3000", "PYSEC-2025-194", "GHSA-rrmf-rvhw-rf47"],
+    "expires": "2026-11-06",
+    "reason": "The ASR endpoint accepts audio; the inspected, commit-pinned GigaAM and server do not call torch.jit.script or accept executable model/script inputs.",
+    "source": "https://github.com/advisories/GHSA-rrmf-rvhw-rf47"
+  },
+  {
+    "package": "setuptools",
+    "versions": ["81.0.0"],
+    "ids": ["CVE-2026-59890", "PYSEC-2026-3447", "GHSA-h35f-9h28-mq5c"],
+    "expires": "2026-11-06",
+    "reason": "Runtime performs inference on Linux and does not build or publish sdists on macOS APFS/HFS+. Build-stage setuptools is updated separately; torch 2.11 requires runtime setuptools<82.",
+    "source": "https://github.com/advisories/GHSA-h35f-9h28-mq5c"
+  }
+]

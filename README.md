@@ -1,144 +1,175 @@
 # voxtype-gigaam
 
-Agent-first installer that puts **GigaAM v3 e2e RNN-T** — state-of-the-art Russian ASR
-with punctuation and text normalization — behind the **voxtype** push-to-talk voice-input
-daemon on Linux.
+Локальное распознавание русской речи **GigaAM v3 e2e RNN-T** для установленного
+voxtype. voxtype остаётся на хосте и отвечает за микрофон, горячую клавишу и ввод
+текста. FastAPI и CPU-модель работают в Docker:
 
-Everything runs **locally on CPU** (no cloud, no GPU required): voxtype records the mic
-and POSTs audio to a small local server (`127.0.0.1:8394`, OpenAI-compatible
-`/v1/audio/transcriptions`) which runs GigaAM v3 and types the text for you.
-
-Verified on **Arch-based Linux (CachyOS) under both niri and GNOME** (Wayland sessions),
-voxtype 1.0.1, Python 3.14. Should work on any distro with systemd user sessions.
-
-## Why GigaAM v3 e2e RNN-T
-
-- SOTA Russian WER (avg **8.4%** across domains vs Whisper large-v3 ~25% — author benchmarks)
-- Produces **punctuated, normalized** text directly (e2e model)
-- Fast on CPU: **~20-24× realtime** (25 s of audio ≈ 1.2 s of inference)
-
-## Architecture
-
-```
-PTT key (push-to-talk)
-        │
-        ▼
-voxtype daemon ──HTTP POST /v1/audio/transcriptions──▶ gigaam-server (FastAPI, 127.0.0.1:8394)
-        ▲                                                        │
-        │                                              GigaAM v3 e2e RNN-T (CPU, torch)
-        └──────────────── typed text ◀──────────────────────────┘
+```text
+voxtype → http://127.0.0.1:8394/v1/audio/transcriptions → контейнер GigaAM
 ```
 
-A watchdog timer (every 15 s) restarts the ASR server if it hangs or dies, so the
-push-to-talk button never goes silently dead.
+Python хоста и его пакеты для установки и работы ASR не используются.
 
-## Quick start
+## Требования и установка
+
+- Linux x86_64 / amd64, systemd user session.
+- Работающий Docker daemon с доступом текущего пользователя и Docker Compose.
+  Docker должен запускаться при загрузке системы.
+- Уже установленный voxtype и `~/.config/voxtype/config.toml` с `[hotkey]`.
+- На хосте: Bash, curl, sha256sum, timeout. Git нужен для клонирования.
+- Интернет при первой сборке; место для готового образа, исходников модели и
+  временных слоёв сборки. Аудит требует сети при каждой установке.
+  Проверенный образ занимает 1,84 ГБ; результаты — в [заметках](docs/notes-ru.md).
 
 ```bash
 git clone https://github.com/p82o/voxtype-gigaam.git
 cd voxtype-gigaam
-./install.sh          # downloads model (~430 MB), builds venv, installs user units
-./verify.sh           # acceptance tests
+./install.sh
+./verify.sh
 ```
 
-Then hold your push-to-talk key and speak Russian. That's it.
+Установщик **не устанавливает voxtype или Docker**. Он собирает образ до остановки
+старого ASR, запускает аудит зависимостей и образа, проверяет загрузку модели
+без сети, отключает старый `gigaam-server.service`, если он существует,
+и запускает контейнер. Затем обновляет
+нужные ключи voxtype, сохраняя `[hotkey]` побайтово, устанавливает watchdog и
+перезапускает voxtype. Контрольная сумма `[hotkey]` сохраняется в
+`~/.local/share/gigaam/docker/hotkey.sha256` для последующей проверки.
+Повторный запуск использует кеш сборки.
 
-## Repository layout
+## Воспроизводимость и размер
 
-```
-install.sh, verify.sh      one-command install / acceptance tests (repo root)
-requirements.txt           pinned Python deps (load-bearing, see inside)
-server/server.py           OpenAI-compatible ASR server (FastAPI, 127.0.0.1:8394)
-systemd/                   user units: gigaam-server.service, gigaam-watchdog.{service,timer}
-scripts/gigaam-watchdog.sh health-check script the timer runs
-config/voxtype-config.toml reference voxtype sections ([whisper], [audio]) to merge
-docs/notes-ru.md           battle-tested notes & pitfalls (Russian)
-```
+- Python 3.14 / Debian 13 (trixie); `--pull` подхватывает обновления базы.
+- `requirements.txt` перечисляет прямые зависимости;
+  `requirements.lock` фиксирует все runtime-пакеты и SHA-256 артефактов для
+  CPython 3.14 / Linux amd64. Версии соответствуют проверенной установке.
+- Проверенная совместимая пара — `torch==2.11.0+cpu`, `torchaudio==2.11.0+cpu`.
+  Transformers исключён. Остальные прямые зависимости имеют диапазоны версий;
+  обновление lock-файлов выполняется отдельной командой с аудитом.
+- Неизменённый код официального GigaAM берётся из commit в `model/revision.txt`.
+  Архив проверяется по `model/source.SHA256SUMS`; checkpoint и tokenizer — по
+  `model/SHA256SUMS`. Веса включены в отдельный слой образа.
+- FFmpeg устанавливается из актуального репозитория Debian без рекомендуемых
+  пакетов. Стадия `runtime-os` пересобирается без кеша для обновления apt-пакетов.
+  Это увеличивает размер относительно прежней специализированной сборки FFmpeg.
+- Python-пакеты устанавливает uv только на стадии сборки, с обязательной
+  проверкой хешей. В конечном образе нет uv и глобального pip с его библиотеками.
+- Сервер вызывает официальный `gigaam.load_model("v3_e2e_rnnt")`.
+  Сохраняются собственные чанки для длинного аудио. Установлен минимальный набор
+  inference-зависимостей: ONNX, pyannote/VAD и тренировочные пакеты исключены.
+  Полный upstream-набор требует `onnxruntime==1.23.*`, для которого нет wheel
+  CPython 3.14; поэтому upstream-пакет целиком через pip не устанавливается.
+- Запуск установки фиксирует конкретный локальный image ID в
+  `~/.local/share/gigaam/docker/image.env`. Watchdog не собирает и не скачивает образы.
 
-## Requirements
+Фиксируются совместимые зависимости ASR и модель; базовый Python 3.14 и пакеты
+Debian могут обновляться при пересборке. Запущенный контейнер сам не обновляется:
+для обновления повторите установку и проверки. Побитовая идентичность сборок
+не заявляется.
 
-- Linux with a **systemd user session** (Wayland or X11)
-- `python3` (≥ 3.10; tested on 3.14), `ffmpeg`, `curl`, `git`
-- **voxtype** installed (push-to-talk daemon; on Arch: `voxtype-bin` from AUR / your repo)
-- ~2 GB disk (venv ~1.6 GB + model 430 MB)
-- **No root required** — everything is installed under `$HOME`
-
-## What `install.sh` does
-
-1. Downloads 4 model files from [ai-sage/GigaAM-v3 @ e2e_rnnt](https://huggingface.co/ai-sage/GigaAM-v3/tree/e2e_rnnt) (URL recorded in `install.sh`)
-   into `~/.local/share/gigaam/model/` (skips files already present).
-2. Creates `~/.local/share/gigaam/venv` with **pinned** versions:
-   `torch==2.9.1 + torchaudio==2.9.1` (CPU wheels), `transformers==4.57.6`,
-   plus runtime deps (`fastapi`, `uvicorn`, `pytorch-lightning`, `pyannote.audio`,
-   `python-multipart`, …). Version pins are **load-bearing** — see Troubleshooting.
-3. Copies `server/server.py` (OpenAI-compatible ASR server) to `~/.local/share/gigaam/`.
-4. Installs and enables user units: `gigaam-server.service` (auto-restart on failure)
-   and `gigaam-watchdog.timer` + `gigaam-watchdog.sh` (health-check → restart on hang).
-5. Merges `voxtype-config.toml` into `~/.config/voxtype/config.toml`:
-   switches voxtype to `mode = "remote"` with this server, sets `max_duration_secs = 300`,
-   **and preserves your existing `[hotkey]` section untouched** (existing config is backed up).
-
-Existing files are backed up as `*.bak.<timestamp>` before being overwritten. The script
-is idempotent — safe to re-run.
-
-## What changes on your system
-
-| Path | What |
-|---|---|
-| `~/.local/share/gigaam/{model,venv,server.py}` | model, venv, server script (server from `server/`) |
-| `~/.config/systemd/user/gigaam-server.service` | ASR server unit |
-| `~/.config/systemd/user/gigaam-watchdog.{service,timer}`, `~/.local/bin/gigaam-watchdog.sh` (from `scripts/`, `systemd/`) | watchdog |
-| `~/.config/voxtype/config.toml` | voxtype switched to remote mode (backup kept) |
-
-Network use: model from Hugging Face, packages from PyPI, optional test wav from Sber CDN
-(during `verify.sh`). The ASR server itself binds to `127.0.0.1` only and makes no calls.
-
-## Verify
+## Обновления и аудит безопасности
 
 ```bash
-./verify.sh               # full acceptance suite
-./verify.sh --skip-watchdog   # skip the watchdog-restart test
+bash scripts/audit.sh                         # runtime, build и audit locks
+bash scripts/audit.sh --image voxtype-gigaam:local  # также весь образ
+bash scripts/update-lock.sh                   # обновить диапазоны и проверить новые locks
+pre-commit install                           # включить локальный аудит перед commit
 ```
 
-Checks: `/health`, the 25-second deadlock regression (audio just over 25 s — the exact
-boundary where an older version deadlocked), watchdog recovery, real-speech transcription
-(the model authors' `example.wav` → an excerpt from *Eugene Onegin*), and — if voxtype is
-present — full end-to-end `voxtype transcribe` through the remote config.
+Скрипты аудита и обновления запускают uv и pip-audit в отдельном образе `tools`;
+Python хоста для них не нужен. Pre-commit — необязательный инструмент разработки,
+который устанавливается отдельно. При обновлении locks проверка выполняется до замены файлов.
+После просмотра diff выполните `./install.sh && ./verify.sh`, чтобы проверить
+новые версии на реальной модели. Смена пары torch/torchaudio требует отдельной
+проверки распознавания; автоматически она не обновляется.
 
-## Rollback / uninstall
+pip-audit 2.10.1 проверяет три lock-файла; Trivy 0.75.0 проверяет Debian и
+Python-пакеты конечного образа. Для Trivy создаётся временный image archive;
+Docker socket в сканер не передаётся. Нужны сеть, место для архива размером
+порядка образа и до 2 ГиБ tmpfs для анализа крупных библиотек PyTorch.
+JSON-отчёты сохраняются в `.build/security/reports/` и не входят в Git.
+
+Ошибка сканера, неполный отчёт, пропущенный пакет и истёкшее исключение блокируют
+установку **до остановки работающего ASR**. Для Python блокируется любая
+неисключённая уязвимость. Для Debian блокируются HIGH/CRITICAL с доступным
+исправлением; остальные находки сохраняются в `report_only` полного отчёта,
+а их количество по severity выводится при установке. Наличие таких находок
+не означает, что образ свободен от уязвимостей. Pre-commit проверяет locks;
+полный аудит образа обязателен в установщике. Unit-тесты политики выполняются
+без сети.
+
+В `security/exceptions.json` описаны два временных исключения до 2026-11-06:
+torch 2.11.0 / CVE-2025-3000 относится к неиспользуемому `torch.jit.script`;
+setuptools 81.0.0 / CVE-2026-59890 относится к сборке sdist на macOS.
+Runtime работает на Linux и не собирает пакеты; setuptools <82 требует torch.
+Исключения ограничены конкретными пакетами, версиями и идентификаторами,
+содержат обоснование и ссылку на advisory. Их нельзя переносить на новые версии
+без повторного анализа. Build-стадия использует обновлённые setuptools и wheel.
+
+## Управление и watchdog
+
+Docker использует `restart: always`: восстанавливает завершившийся процесс и
+поднимает существующий контейнер при запуске Docker daemon. В systemd остаются
+только `gigaam-watchdog.service` и `gigaam-watchdog.timer`; прежний серверный сервис
+отключён. Скрипт проверяется каждые 15 секунд после начальной задержки таймера.
+
+Watchdog запускает остановленный контейнер или создаёт отсутствующий из
+установленного Compose-описания. При зависании сохраняется двойная проверка
+`/health`: 15 секунд, пауза 5 секунд, ещё 15 секунд. `/health` проходит через тот же
+RLock, что и inference. Первые 120 секунд после старта выделены на загрузку модели;
+перезапуск, уже выполняемый Docker, не прерывается.
+
+Порт публикуется только на `127.0.0.1:8394`. Контейнер работает с UID/GID 10001,
+read-only файловой системой и временным `/tmp` в tmpfs. Сокет Docker, микрофон и
+домашний каталог в контейнер не передаются. Логи ASR не содержат распознанного текста.
+
+Для временного обслуживания сначала остановите watchdog, затем контейнер:
 
 ```bash
-systemctl --user disable --now gigaam-watchdog.timer gigaam-server.service
-rm ~/.config/systemd/user/gigaam-server.service \
-   ~/.config/systemd/user/gigaam-watchdog.{service,timer} ~/.local/bin/gigaam-watchdog.sh
-systemctl --user daemon-reload
-cp ~/.config/voxtype/config.toml.bak.<timestamp> ~/.config/voxtype/config.toml   # restore prev config
-systemctl --user restart voxtype
-rm -rf ~/.local/share/gigaam
+systemctl --user stop gigaam-watchdog.timer gigaam-watchdog.service
+docker update --restart=no gigaam-asr
+docker stop --timeout 15 gigaam-asr
 ```
 
-## Troubleshooting (short index)
+Так остановка сохраняется и после перезапуска Docker. Вернуть работу:
 
-Battle-tested notes with full details are in **[docs/notes-ru.md](docs/notes-ru.md)** (Russian).
+```bash
+docker update --restart=always gigaam-asr
+docker start gigaam-asr
+systemctl --user start gigaam-watchdog.timer
+```
 
-| Symptom | Cause / fix |
-|---|---|
-| Server 200 OK but `{"text": ""}` on synthetic/espeak audio | Known model trait, not a bug — test with real speech (`verify.sh` does) |
-| Transcriptions silently stop responding, unit still "active" | Old deadlock bug — make sure `server.py` is from this repo (`RLock` fix) |
-| `Form data requires "python-multipart"` | `pip install python-multipart` in the venv |
-| `Tensor on device cpu is not on the expected device meta` | transformers ≥ 5.x is incompatible — pin `transformers==4.57.6` |
-| `ImportError: ... hydra, omegaconf, pyannote, sentencepiece` | install `hydra-core omegaconf sentencepiece pyannote.audio` |
-| voxtype cuts recording at 25 s | raise `audio.max_duration_secs` (restart voxtype) |
-| Mic noise in silence | ALSA capture/boost too hot — see notes-ru.md §3, persist with `pkexec alsactl store` |
+## Проверки
 
-## Agent guidance
+```bash
+./verify.sh                   # включает остановку, удаление и заморозку ASR
+./verify.sh --skip-watchdog   # проверки без этих вмешательств
+python3 -m unittest discover -s tests -v  # только разработка, Python хоста необязателен для установки
+```
 
-If you are an AI agent deploying this for a user: read **[AGENTS.md](AGENTS.md)** first —
-it contains preconditions, the exact procedure, acceptance criteria, do-nots, and rollback.
+Проверяются restart policy, локальная публикация порта, пользователь контейнера,
+Python 3.14, согласованная CPU-пара torch/torchaudio и revision GigaAM,
+health, сохранность hotkey, аудио 25.003 секунды, официальный пример авторов,
+60 секунд речи, отклонение пустого/повреждённого аудио и транскрипция через voxtype.
+Полный набор дополнительно проверяет восстановление завершившегося процесса Docker,
+остановленного и удалённого контейнера, а также процесса, замороженного SIGSTOP.
+Во время полного набора voice input временно недоступен. Перезагрузка компьютера
+и перезапуск общего Docker daemon в эти тесты не входят.
 
-## Credits & license
+## Файлы проекта
 
-- Model: [ai-sage/GigaAM-v3](https://huggingface.co/ai-sage/GigaAM-v3) (MIT, Sber),
-  paper: *GigaAM: Efficient Self-Supervised Learner for Speech Recognition* (InterSpeech 2025)
-- Voice input daemon: [voxtype](https://github.com/peteonrails/voxtype) (peteonrails)
-- Code here: MIT — see [LICENSE](LICENSE)
+- `Dockerfile`, `compose.yaml` — сборка и запуск.
+- `requirements.txt` и `requirements.lock` — зависимости inference;
+  `build-requirements.*` и `audit-requirements.*` — инструменты сборки и аудита.
+- `model/` — revision и контрольные суммы, без весов в Git.
+- `server/server.py` — FastAPI и inference; `scripts/` — подготовка модели, watchdog, проверки.
+- `systemd/gigaam-watchdog.*` — действующие user units.
+- `security/exceptions.json`, `.pre-commit-config.yaml`, `tests/` — политика аудита и проверки.
+- `docs/notes-ru.md` — результаты установки и диагностика.
+- `AGENTS.md` — инструкция для агентов установки.
+
+## Источники и лицензия
+
+[GigaAM](https://github.com/salute-developers/GigaAM) — MIT, Sber;
+[voxtype](https://github.com/peteonrails/voxtype) — peteonrails.
+Код репозитория — MIT, см. LICENSE.

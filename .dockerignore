@@ -1,0 +1,16 @@
+**
+!Dockerfile
+!requirements.lock
+!build-requirements.lock
+!audit-requirements.lock
+!model/
+!model/revision.txt
+!model/SHA256SUMS
+!model/source.SHA256SUMS
+!.build/
+!.build/gigaam.tar.gz
+!.build/model-native/
+!.build/model-native/v3_e2e_rnnt.ckpt
+!.build/model-native/v3_e2e_rnnt_tokenizer.model
+!server/
+!server/server.py

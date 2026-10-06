@@ -1,7 +1,8 @@
 [Unit]
-Description=Health check for gigaam-server, restarts it if hung
+Description=Recover a stopped or unresponsive GigaAM Docker container
 
 [Service]
 Type=oneshot
 ExecStart=%h/.local/bin/gigaam-watchdog.sh
 NoNewPrivileges=true
+TimeoutStartSec=300
